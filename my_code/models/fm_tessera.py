@@ -12,9 +12,7 @@ class TesseraFM(FMBase):
     """
     def __init__(self, pastis_root: Path) -> None:
         super().__init__()
-        self.pastis_root = pastis_root
-        self.repo_root = pastis_root.parent
-        self.emb_root = self.repo_root / "pastis_embedding" / "TESSERA_EMBEDDING"
+        self.emb_root = pastis_root.parent / "pastis_embedding" / "TESSERA_EMBEDDING"
 
     def _path_for_pid(self, pid: int) -> Path:
         path = self.emb_root / f"{pid}.npy"

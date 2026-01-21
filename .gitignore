@@ -10,6 +10,7 @@ __pycache__/
 # Logs & outputs
 logs/
 plots/
+plots2/
 lightning_logs/
 
 # Données lourdes

@@ -11,59 +11,64 @@ from torch.utils.data import Dataset
 from my_code.models.fm_base import FMBase
 
 
-def _read_patch_ids(metadata_geojson: Path) -> List[int]:
+def read_patch_ids(metadata_geojson: Path) -> List[int]:
     """
     Lit metadata.geojson et récupère les ID_PATCH.
     """
-    obj = json.loads(metadata_geojson.read_text(encoding="utf-8"))
-    feats = obj.get("features", [])
+    metadata = json.loads(metadata_geojson.read_text(encoding="utf-8"))
+    feats = metadata.get("features", [])
+
     pids: List[int] = []
     for ft in feats:
         props = ft.get("properties", {})
-        if "ID_PATCH" in props:
-            pids.append(int(props["ID_PATCH"]))
-    if not pids:
-        raise RuntimeError(f"No ID_PATCH found in {metadata_geojson}")
+        if "ID_PATCH" not in props:
+            raise RuntimeError(f"Pas d'ID_PATCH dans {metadata_geojson}")
+        pids.append(int(props["ID_PATCH"]))
+
+
+    pids.sort()
     return pids
 
 
-def _target_path(pastis_root: Path, pid: int) -> Path:
+def target_path(pastis_root: Path, pid: int) -> Path:
     """
-    Chemin unique imposé par l'organisation PASTIS-R :
-      PASTIS-R/ANNOTATIONS/TARGET_<pid>.npy
+    PASTIS-R/ANNOTATIONS/TARGET_<pid>.npy
     """
     path = pastis_root / "ANNOTATIONS" / f"TARGET_{pid}.npy"
     if not path.exists():
-        raise FileNotFoundError(f"Missing target for pid={pid}: {path}")
+        raise FileNotFoundError(f"Pas de target pour l'identifiant{pid}: {path}")
     return path
 
 
-def _load_mask_hw(target_path: Path) -> torch.Tensor:
+def load_mask_hw(path: Path) -> torch.Tensor:
     """
-    Charge TARGET_<pid>.npy et retourne un masque (H,W) int64.
+    Charge TARGET_<pid>.npy et retourne un masque (H, W) int64.
 
-    Supporte:
-      - (H,W)
-      - (3,H,W) où canal 0 = labels
+    Format de target :
+      - (3, H, W) avec :
+          canal 0 : labels (0..19)
+          canal 1 : info auxiliaire 
+          canal 2 : info auxiliaire
     """
-    t = np.load(target_path)
+    t = np.load(path)
+    if t.ndim != 3 or t.shape[0] != 3:
+        raise ValueError(f"TARGET doit être de shape (3,H,W), reçu {t.shape} pour {path}")
 
-    if t.ndim == 2:
-        mask = t
-    elif t.ndim == 3 and t.shape[0] == 3:
-        mask = t[0]
-    else:
-        raise ValueError(f"Unexpected TARGET shape={t.shape} for {target_path}")
+    labels = t[0] 
 
-    return torch.from_numpy(mask.astype(np.int64, copy=False))
+    if labels.min() < 0 or labels.max()>19 :
+        raise ValueError(f"Labels incorrects dans {path}: min={labels.min()}, mxn={labels.max()}")
+
+    return torch.from_numpy(labels.astype(np.int64, copy=False))
+
 
 
 class PastisEmbeddingDataset(Dataset):
     """
-    Dataset minimal :
-      - embeddings: (H,W,D) float32
-      - masks:      (H,W)   int64
-      - pid:        int64
+    Un item =
+        embeddings: (H,W,D) float32
+      + masks:      (H,W)   int64
+      + pid:                int64 
     """
     def __init__(
         self,
@@ -71,15 +76,18 @@ class PastisEmbeddingDataset(Dataset):
         fm: FMBase,
         subset_patch_ids: Optional[Sequence[int]] = None,
     ) -> None:
-        self.pastis_root = pastis_root
+        self.pastis_root = Path(pastis_root)
         self.fm = fm
 
-        pids = _read_patch_ids(pastis_root / "metadata.geojson")
+        pids = read_patch_ids(self.pastis_root / "metadata.geojson")
+
         if subset_patch_ids is not None:
-            wanted = set(int(x) for x in subset_patch_ids)
+            wanted = {int(x) for x in subset_patch_ids}
             pids = [pid for pid in pids if pid in wanted]
+
         if not pids:
-            raise RuntimeError("Empty dataset after filtering.")
+            raise RuntimeError("Dataset vide après filtrage.")
+
         self.pids = pids
 
     def __len__(self) -> int:
@@ -91,12 +99,12 @@ class PastisEmbeddingDataset(Dataset):
         fm_out = self.fm.load(pid)
         emb = fm_out.embeddings_hwd  # (H,W,D)
 
-        target_path = _target_path(self.pastis_root, pid)
-        mask = _load_mask_hw(target_path)  # (H,W)
+        mpath = target_path(self.pastis_root, pid)
+        mask = load_mask_hw(mpath)  # (H,W)
 
         if tuple(emb.shape[:2]) != tuple(mask.shape):
             raise ValueError(
-                f"HW mismatch pid={pid}: emb HW={tuple(emb.shape[:2])} vs mask HW={tuple(mask.shape)}"
+                f"Décorrellation des dim pour {pid}: emb HW={tuple(emb.shape[:2])} alors que mask HW={tuple(mask.shape)}"
             )
 
         return {

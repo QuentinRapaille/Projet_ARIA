@@ -13,15 +13,15 @@ Layout = Literal["HWD", "DHW"]
 @dataclass(frozen=True)
 class FMOutput:
     """
-    Sortie standardisée pour le pipeline debug.
+    Sortie standardisée pour le pipeline.
     """
-    embeddings_hwd: torch.Tensor  # (H, W, D) float32
+    embeddings_hwd: torch.Tensor  # de la forme (H, W, D) float32
     embedding_dim: int            # D
 
 
 class FMBase:
     """
-    Interface minimale : charger un embedding pour un patch_id.
+    But unique : cadrer le chargement d'un embedding à partir d'un patch_id (pid).
     """
     def __init__(self) -> None:
         self._embedding_dim: Optional[int] = None
@@ -37,35 +37,35 @@ class FMBase:
         path = self._path_for_pid(pid)
         arr = np.load(path)
         if arr.ndim != 3:
-            raise ValueError(f"Expected 3D embedding, got shape={arr.shape} for {path}")
+            raise ValueError(f"Embedding de taille : {arr.shape} à {path}, on attend 3 dimensions.")
 
-        emb = self._to_hwd(arr, self._layout())
+        emb = self._to_hwd(arr, self._layout()) # normalisation en (H,W,D)
         d = int(emb.shape[-1])
 
         if self._embedding_dim is None:
             self._embedding_dim = d
         elif self._embedding_dim != d:
             raise ValueError(
-                f"Inconsistent embedding_dim within same FM: first={self._embedding_dim}, now={d} (pid={pid}, file={path})"
+                f"Taille d'embedding incohérente : cas référence : {self._embedding_dim}, actuel : {d} (ID:{pid}, Path:{path})"
             )
 
         return FMOutput(embeddings_hwd=emb, embedding_dim=d)
 
     def _to_hwd(self, arr: np.ndarray, layout: Layout) -> torch.Tensor:
         """
-        Convertit numpy -> torch float32 (H,W,D).
+        assure float32 (H,W,D).
         """
         if layout == "HWD":
             out = arr
         elif layout == "DHW":
             out = np.moveaxis(arr, 0, -1)
         else:
-            raise ValueError(f"Unknown layout={layout}")
+            raise ValueError(f"Layout non reconnu: {layout}")
 
         out = out.astype(np.float32, copy=False)
         return torch.from_numpy(out)
 
-    # Méthodes à implémenter dans les enfants
+    # Fonctions à implémenter dans les sous-classes
     def _path_for_pid(self, pid: int) -> Path:
         raise NotImplementedError
 

@@ -8,18 +8,16 @@ from .fm_base import FMBase, Layout
 class AliseFM(FMBase):
     """
     Embeddings : .../pastis_embedding/ALISE_EMB/alise_embedding_<pid>.npy
-    Layout : (D,H,W) -> converti en (H,W,D)
+    Layout : (D,H,W) -> converti dans fm_base en (H,W,D)
     """
     def __init__(self, pastis_root: Path) -> None:
         super().__init__()
-        self.pastis_root = pastis_root
-        self.repo_root = pastis_root.parent
-        self.emb_root = self.repo_root / "pastis_embedding" / "ALISE_EMB"
+        self.emb_root = pastis_root.parent / "pastis_embedding" / "ALISE_EMB"
 
     def _path_for_pid(self, pid: int) -> Path:
         path = self.emb_root / f"alise_embedding_{pid}.npy"
         if not path.exists():
-            raise FileNotFoundError(f"Missing ALISE embedding for pid={pid}: {path}")
+            raise FileNotFoundError(f"Pas d'embedding alise_embedding_{pid}.npy en {path}")
         return path
 
     def _layout(self) -> Layout:
