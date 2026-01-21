@@ -1,0 +1,22 @@
+# Environnements
+venv/
+venv_code_2/
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs & outputs
+logs/
+plots/
+lightning_logs/
+
+# Données lourdes
+PASTIS-R/
+pastis_embedding/
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/

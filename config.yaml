@@ -1,0 +1,22 @@
+seed: 42
+out_dir: "logs"
+experiment_name: "mlp_debug"
+
+pastis_root: "/Users/quentinrapaille/Desktop/ENS\ Paris\ Saclay\ Année\ 3/Projet\ ARIA/Code_Projet/PASTIS-R"
+
+name: "tessera"          # tessera | alphaearth | alise
+
+num_classes: 20
+ignore_index: -100
+hidden_dim: 512
+
+batch_size: 8
+num_workers: 4
+pin_memory: true
+
+max_epochs: 5
+lr: 0.001
+
+accelerator: "auto"
+devices: "auto"
+log_every_n_steps: 10
