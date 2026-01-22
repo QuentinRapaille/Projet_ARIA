@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 
 import lightning as L
+import torch
 from lightning.pytorch.loggers import CSVLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 from my_code.config import load_config
 from my_code.models import build_fm
@@ -30,7 +32,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        default="config.yaml", # Chemin par défaut, pour utiliser un autre .yaml : python train_mlp.py --config X.yaml 
+        default="config.yaml",  # Chemin par défaut
     )
     args = parser.parse_args()
 
@@ -53,10 +55,25 @@ def main() -> None:
         test_fold=cfg.test_fold,
     )
 
-    head_cfg = MLPHeadConfig(in_dim=in_dim, hidden_dim_1=cfg.hidden_dim_1, hidden_dim_2=cfg.hidden_dim_2, num_classes=cfg.num_classes)
+    head_cfg = MLPHeadConfig(
+        in_dim=in_dim,
+        hidden_dim_1=cfg.hidden_dim_1,
+        hidden_dim_2=cfg.hidden_dim_2,
+        num_classes=cfg.num_classes,
+    )
     model = SegmentationMLPModule(head_cfg=head_cfg, lr=cfg.lr, ignore_index=cfg.ignore_index)
 
     logger = CSVLogger(save_dir=cfg.out_dir, name=cfg.experiment_name)
+
+    run_dir = Path(logger.log_dir)
+    ckpt_cb = ModelCheckpoint(
+        dirpath=run_dir,
+        filename="best-{epoch:02d}-{val_mIoU:.4f}",
+        monitor="val/mIoU",
+        mode="max",
+        save_top_k=1,
+        save_last=True,  # écrit aussi last.ckpt
+    )
 
     trainer = L.Trainer(
         accelerator=cfg.accelerator,
@@ -64,9 +81,16 @@ def main() -> None:
         max_epochs=cfg.max_epochs,
         logger=logger,
         log_every_n_steps=cfg.log_every_n_steps,
+        callbacks=[ckpt_cb],
     )
 
     trainer.fit(model, datamodule=datamodule)
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    trainer.save_checkpoint(run_dir / "model_final.ckpt")
+    state_cpu = {k: v.detach().cpu() for k, v in model.state_dict().items()}
+    torch.save(state_cpu, run_dir / "model_final_state_dict.pt")
+
     trainer.test(model, datamodule=datamodule)
 
 

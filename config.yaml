@@ -4,10 +4,10 @@ experiment_name: "mlp_debug"
 
 pastis_root: "/Users/quentinrapaille/Desktop/ENS\ Paris\ Saclay\ Année\ 3/Projet\ ARIA/Code_Projet/PASTIS-R"
 
-name: "alise"          # tessera | alphaearth | alise
+name: "tessera"          # tessera | alphaearth | alise
 
 num_classes: 20
-ignore_index: -100
+ignore_index: 0
 hidden_dim_1: 512
 hidden_dim_2: 256
 
