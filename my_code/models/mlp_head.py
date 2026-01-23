@@ -3,6 +3,13 @@ from __future__ import annotations
 import torch
 from torch import nn, Tensor
 
+@dataclass(frozen=True)
+class MLPHeadConfig:
+    in_dim: int
+    hidden_dim_1: int
+    hidden_dim_2: int
+    num_classes: int
+
 
 class PixelMLPHead(nn.Module):
     """
