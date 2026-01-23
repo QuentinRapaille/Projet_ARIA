@@ -12,6 +12,7 @@ logs/
 plots/
 plots2/
 lightning_logs/
+tests/
 
 # Données lourdes
 PASTIS-R/
