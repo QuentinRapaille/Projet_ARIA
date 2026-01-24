@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import torch
 from torch import nn, Tensor
 
-
 @dataclass(frozen=True)
 class MLPHeadConfig:
     in_dim: int
@@ -16,15 +15,12 @@ class MLPHeadConfig:
 
 class PixelMLPHead(nn.Module):
     """
-    entrée:  (B,H,W,D)
-    sortie: (B,H,W,K)
+    input:  (B,H,W,D)
+    output: (B,H,W,K)
     """
     def __init__(self, cfg: MLPHeadConfig) -> None:
         super().__init__()
         self.cfg = cfg
-
-        dropout_p = getattr(cfg, "dropout", 0.3)
-        hidden = cfg.hidden_dim_2        
 
         # ANCIENNE VERSION : (sur-apprentissage)
         # self.net = nn.Sequential(
@@ -35,43 +31,18 @@ class PixelMLPHead(nn.Module):
         #     nn.Linear(cfg.hidden_dim_2, cfg.num_classes),
         # )
 
-        # ANCIENNE VERSION : (MLP 1 sous-couche pour supprimer le su-apprentissage)
-        # self.net = nn.Sequential(
-        #     nn.Linear(cfg.in_dim, hidden),
-        #     nn.ReLU(inplace=True),
-        #     nn.Dropout(p=dropout_p),
-        #     nn.Linear(hidden, cfg.num_classes),
-        # )
+        # NOUVELLE VERSION :
+        # Dropout: force le modèle à ne pas dépendre d'un sous-ensemble fixe de neurones (Valeur du dropout prise dans le code de TESSERA)
+        dropout_p = getattr(cfg, "dropout", 0.3)
 
-        # NOUVELLE VERSION (module convolutionel : cohérence spatiale)
-        #  - Plus légé que le U-Net suggéré par la doc AlphaEarth
-        #  - Ajoute de la cohérence spatiale.
+        hidden = cfg.hidden_dim_2  # Ici = 256
 
-        n_convs = 2 # 2 blocs de convolution
-
-        layers: list[nn.Module] = []
-
-        # D -> hidden
-        layers += [
-            nn.Conv2d(cfg.in_dim, hidden, kernel_size=3, padding=1, bias=False),
+        self.net = nn.Sequential(
+            nn.Linear(cfg.in_dim, hidden),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(p=dropout_p),
-        ]
-
-        # (hidden -> hidden) x n_convs
-        for i in range(n_convs - 1):
-            layers += [
-                nn.Conv2d(hidden, hidden, kernel_size=3, padding=1, bias=False),
-                nn.ReLU(inplace=True),
-                nn.Dropout2d(p=dropout_p),
-            ]
-
-        # hidden -> K 
-        layers += [
-            nn.Conv2d(hidden, cfg.num_classes, kernel_size=1, bias=True),
-        ]
-
-        self.net = nn.Sequential(*layers)
+            nn.Dropout(p=dropout_p),
+            nn.Linear(hidden, cfg.num_classes),
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         if x.ndim != 4:
@@ -81,11 +52,9 @@ class PixelMLPHead(nn.Module):
         if d != self.cfg.in_dim:
             raise ValueError(f"dimension d'entrée inattendue : {d} au lieu de {self.cfg.in_dim}")
 
+        # Aplatissement spatial pour appliquer le MLP uniformément sur chaque pixel
+        # (B,H,W,D) -> (B*H*W, D)
+        x2 = x.reshape(b * h * w, d)
+        y = self.net(x2)
 
-        # (B,H,W,D) -> (B,D,H,W)
-        x_cf = x.permute(0, 3, 1, 2).contiguous()
-        # (B,D,H,W) -> (B,K,H,W)
-        y_cf = self.net(x_cf)
-        # (B,K,H,W) -> (B,H,W,K)
-        y = y_cf.permute(0, 2, 3, 1).contiguous()
-        return y
+        return y.reshape(b, h, w, self.cfg.num_classes)
