@@ -16,11 +16,8 @@ class MLPHeadConfig:
 
 class PixelMLPHead(nn.Module):
     """
-    input:  (B,H,W,D)
-    output: (B,H,W,K)
-
-    Implémentation "shallow conv head" : ajoute un minimum de contexte spatial
-    via quelques convolutions 3x3 sur la carte (B,D,H,W), puis une projection 1x1 vers K classes.
+    entrée:  (B,H,W,D)
+    sortie: (B,H,W,K)
     """
     def __init__(self, cfg: MLPHeadConfig) -> None:
         super().__init__()
@@ -38,7 +35,7 @@ class PixelMLPHead(nn.Module):
         #     nn.Linear(cfg.hidden_dim_2, cfg.num_classes),
         # )
 
-        # ANCIENNE VERSION (MLP 1 sous-couche)
+        # ANCIENNE VERSION : (MLP 1 sous-couche pour supprimer le su-apprentissage)
         # self.net = nn.Sequential(
         #     nn.Linear(cfg.in_dim, hidden),
         #     nn.ReLU(inplace=True),
@@ -47,9 +44,7 @@ class PixelMLPHead(nn.Module):
         # )
 
         # NOUVELLE VERSION (module convolutionel : cohérence spatiale)
-        #
-        # Avantages :
-        #  - Très léger comparé au U-Net suggéré par la doc AlphaEarth
+        #  - Plus légé que le U-Net suggéré par la doc AlphaEarth
         #  - Ajoute de la cohérence spatiale.
 
         n_convs = 2 # 2 blocs de convolution
@@ -63,8 +58,8 @@ class PixelMLPHead(nn.Module):
             nn.Dropout2d(p=dropout_p),
         ]
 
-        # hidden -> hidden
-        for _ in range(n_convs - 1):
+        # (hidden -> hidden) x n_convs
+        for i in range(n_convs - 1):
             layers += [
                 nn.Conv2d(hidden, hidden, kernel_size=3, padding=1, bias=False),
                 nn.ReLU(inplace=True),
